@@ -6,6 +6,9 @@
 package msfots;
 
 import java.io.*;
+import java.net.*;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 /**
  *
@@ -16,7 +19,7 @@ public class MSFOTS {
     /**
      * @param args the command line arguments
      */
-    public static void main(String[] args) {
+    public static void main(String[] args) throws UnknownHostException, SocketException, IOException {
         if (args.length == 0)
         {
                 System.out.println("Usage:");
@@ -35,6 +38,11 @@ public class MSFOTS {
             case 'C':
             case 'c':
                 System.out.println("Client-Mode");
+                
+                try (msfots.Client c = new msfots.Client(Integer.parseInt(args[2]),InetAddress.getByName(args[1])))
+                {
+                    c.sendFile(Paths.get(args[3]));   
+                }
                 break;
             default:
                 break;
