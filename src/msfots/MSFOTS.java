@@ -9,7 +9,7 @@ import java.io.*;
 
 /**
  *
- * @author Markus Klemm.net
+ * @author MarkusKlemm.net
  */
 public class MSFOTS {
 
