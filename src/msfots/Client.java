@@ -10,6 +10,8 @@ import java.net.*;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.zip.*;
+import java.nio.Buffer.*;
+import java.nio.ByteBuffer;
 
 /**
  *
@@ -20,7 +22,9 @@ public class Client implements AutoCloseable
 {
     public Client (int port, InetAddress addr) throws SocketException
     {
-        ds = new DatagramSocket(port,addr);
+        dataFieldOctets = 1024; //NetworkInterface.getByInetAddress sucks
+        ds = new DatagramSocket();
+        ds.connect(addr,port);
         random = new Random();
     }
     
@@ -30,11 +34,10 @@ public class Client implements AutoCloseable
         
         cfis = new CheckedInputStream (new FileInputStream(p.toString()),new CRC32());
         
-        short sessionId = (short) random.nextInt();
-        byte packetId = 0;
+        sessionId = (short) random.nextInt();
+        packetId = 0;
         
-        System.out.print("My Session ID is:"); System.out.println(sessionId);
-        System.out.print("First byte of file is:"); System.out.println(cfis.read());
+        DatagramPacket lastPacket = generateStartPacket();
         
         
     }
@@ -52,5 +55,35 @@ public class Client implements AutoCloseable
     private CheckedInputStream cfis;
     
     private Random random;
+    private short sessionId;
+    private byte packetId;
+    private final short dataFieldOctets;
+    
+    private DatagramPacket generateStartPacket() throws UnsupportedEncodingException
+    {
+        ByteBuffer data = ByteBuffer.allocate(512); //Initial byte order always bigendian
+        
+        data.putShort(sessionId);
+        assert(packetId == 0); data.put(packetId);
+        
+        final byte[] startSymbol = ("Start").getBytes("US-ASCII");
+        byte[] testSymbol = {0x53,0x74,0x61,0x72,0x74};
+        assert(testSymbol ==  startSymbol);
+        data.put(startSymbol);
+        
+        data.putLong(p.toFile().length());
+        
+        data.put(p.getFileName().toString().getBytes("UTF-8"));
+        
+        DatagramPacket dp = new DatagramPacket(data.array(),data.capacity());
+        return dp;
+    }
+    
+    private DatagramPacket generateNextPacket()
+    {
+        
+        return null;
+    }
+    
 }
 
