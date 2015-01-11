@@ -35,6 +35,7 @@ public class Client implements AutoCloseable
         p = pathToFile;
         
         cfis = new CheckedInputStream (new FileInputStream(p.toString()),new CRC32());
+        finishedReading = false;
         
         sessionId = (short) random.nextInt();
         packetId = 0;
@@ -93,7 +94,7 @@ public class Client implements AutoCloseable
                     continue; //Retry
                 }
                 rto.sampleRTT((int) (System.nanoTime() - pre) / 1000);
-                if (inComing.getShort() == sessionId && inComing.get() == packetId)
+                if (inComing.getShort() == sessionId && inComing.get() == packetId % 2)
                 {
                     //TODO behavoir maybe resend and break IFF correctSessionId and Timeout
                     break; //Succesfully sent
@@ -115,6 +116,7 @@ public class Client implements AutoCloseable
     private DatagramSocket ds;
     private Path p;
     private CheckedInputStream cfis;
+    private boolean finishedReading;
     
     private Random random;
     private short sessionId;
@@ -148,10 +150,41 @@ public class Client implements AutoCloseable
         return dp;
     }
     
-    private DatagramPacket generateNextPacket()
+    private DatagramPacket generateNextPacket() throws IOException
     {
+        if (finishedReading)
+        {
+            return null;
+        }
         
-        return null;
+        final byte headerlength = 3;
+        ByteBuffer data = ByteBuffer.allocate(dataFieldOctets+headerlength);
+        assert(data.hasArray());
+        
+        packetId++;
+        data.putShort(sessionId); data.put((byte)(packetId % 2));
+        
+        int read = cfis.read(data.array(),headerlength,dataFieldOctets);//Todo catch IOException and retry
+        int toBeUsed = headerlength;
+
+        if (read == -1)
+        {
+            finishedReading = true;
+            data.putInt((int) cfis.getChecksum().getValue());
+            toBeUsed += 4;
+        } else if (read < dataFieldOctets - 4)
+        {
+            finishedReading = true;
+            data.position(headerlength + read);
+            data.putInt((int) cfis.getChecksum().getValue());
+            toBeUsed += read + 4;
+        } else 
+        {
+            assert (read <= dataFieldOctets);
+            toBeUsed += read;
+        }
+        
+        return new DatagramPacket(data.array(),0,toBeUsed);
     }
     
 }
