@@ -73,7 +73,8 @@ public class Client implements AutoCloseable
         
         data.putLong(p.toFile().length());
         
-        data.put(p.getFileName().toString().getBytes("UTF-8"));
+        data.putShort((short) p.getFileName().toString().length());
+        data.put(p.getFileName().toString().getBytes("UTF-8"));//TODO limit to 255 octets
         
         DatagramPacket dp = new DatagramPacket(data.array(),data.capacity());
         return dp;
