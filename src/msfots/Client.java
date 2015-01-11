@@ -13,6 +13,7 @@ import java.util.*;
 import java.util.zip.*;
 import java.nio.Buffer.*;
 import java.nio.ByteBuffer;
+import java.lang.*;
 
 /**
  *
@@ -38,9 +39,69 @@ public class Client implements AutoCloseable
         sessionId = (short) random.nextInt();
         packetId = 0;
         
-        DatagramPacket lastPacket = generateStartPacket();
+        DatagramPacket outGoingPacket = generateStartPacket();
         
+        class RTO
+        {
+            public int getValue()
+            {
+                return (min(1000,eRTT + 4 * dRTT));
+            }
+            
+            public void sampleRTT(int sRTT)
+            {
+                eRTT = (int) ((1-alpha)*eRTT + alpha*sRTT);
+                dRTT = (int) ((1-beta)*dRTT + beta*(sRTT-eRTT)); 
+            }
+            
+            public RTO()
+            {
+                eRTT = 3000; dRTT = 1500;
+                alpha = 0.125; beta = 0.125;
+            }
+            
+            private int eRTT,dRTT;
+            private final double alpha,beta;
+        }
         
+        RTO rto = new RTO();
+        
+        do
+        {
+            //As long as there are packets to send
+            for (int sendTry = 0; ;sendTry++)
+            {
+                //As long as not recieved the correct ackn
+                final long pre = System.nanoTime();
+                ds.send(outGoingPacket);
+                
+                ByteBuffer inComing = ByteBuffer.allocate(3);
+                assert(inComing.hasArray());
+                DatagramPacket inComingPacket = new DatagramPacket(inComing.array(),inComing.capacity());
+                
+                try {
+                    ds.setSoTimeout(rto.getValue());
+                    ds.receive(inComingPacket);
+                } catch (java.net.SocketTimeoutException e)
+                {
+                    rto.sampleRTT((int) (System.nanoTime() - pre) / 1000);
+    
+                    if (sendTry == 10)
+                    {
+                        throw new HostTimeOutException("Cancel resend after 10th try");
+                    }
+                    continue; //Retry
+                }
+                rto.sampleRTT((int) (System.nanoTime() - pre) / 1000);
+                if (inComing.getShort() == sessionId && inComing.get() == packetId)
+                {
+                    //TODO behavoir maybe resend and break IFF correctSessionId and Timeout
+                    break; //Succesfully sent
+                }
+                
+            }
+            
+        } while ((outGoingPacket = generateNextPacket()) != null);
     }
     
     @Override
@@ -75,9 +136,10 @@ public class Client implements AutoCloseable
         data.putLong(p.toFile().length());
         
         data.putShort((short) min(255, p.getFileName().toString().length()));
-        data.put(p.getFileName().toString().substring(0,min(255-1, p.getFileName().toString().length()-1)).getBytes("UTF-8") );
+        data.put(p.getFileName().toString().substring(0,min(255, p.getFileName().toString().length())).getBytes("UTF-8") );
         
         CRC32 firstPacketCRC = new CRC32();
+        assert(data.hasArray());
         firstPacketCRC.update(data.array(),0,data.position());//High off by 1 risk
         
         data.putInt((int) firstPacketCRC.getValue());//Hope it takes the 32 LSBs
