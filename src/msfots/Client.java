@@ -6,6 +6,7 @@
 package msfots;
 
 import java.io.*;
+import static java.lang.Integer.min;
 import java.net.*;
 import java.nio.file.Path;
 import java.util.*;
@@ -73,10 +74,15 @@ public class Client implements AutoCloseable
         
         data.putLong(p.toFile().length());
         
-        data.putShort((short) p.getFileName().toString().length());
-        data.put(p.getFileName().toString().getBytes("UTF-8"));//TODO limit to 255 octets
+        data.putShort((short) min(255, p.getFileName().toString().length()));
+        data.put(p.getFileName().toString().substring(0,min(255-1, p.getFileName().toString().length()-1)).getBytes("UTF-8") );
         
-        DatagramPacket dp = new DatagramPacket(data.array(),data.capacity());
+        CRC32 firstPacketCRC = new CRC32();
+        firstPacketCRC.update(data.array(),0,data.position());//High off by 1 risk
+        
+        data.putInt((int) firstPacketCRC.getValue());//Hope it takes the 32 LSBs
+        
+        DatagramPacket dp = new DatagramPacket(data.array(),0,data.position());
         return dp;
     }
     
