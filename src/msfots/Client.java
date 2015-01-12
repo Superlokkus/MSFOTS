@@ -52,7 +52,7 @@ public class Client implements AutoCloseable
             public void sampleRTT(int sRTT)
             {
                 eRTT = (int) ((1-alpha)*eRTT + alpha*sRTT);
-                dRTT = (int) ((1-beta)*dRTT + beta*(sRTT-eRTT)); 
+                dRTT = (int) ((1-beta)*dRTT + beta*(Math.abs(sRTT-eRTT))); 
             }
             
             public RTO()
@@ -70,7 +70,7 @@ public class Client implements AutoCloseable
         do
         {
             //As long as there are packets to send
-            for (int sendTry = 0; ;sendTry++)
+            for (int sendTry = 0; sendTry<11 ;sendTry++)
             {
                 //As long as not recieved the correct ackn
                 final long pre = System.nanoTime();
@@ -94,7 +94,7 @@ public class Client implements AutoCloseable
                     continue; //Retry
                 }
                 rto.sampleRTT((int) (System.nanoTime() - pre) / 1000);
-                if (inComing.getShort() == sessionId && inComing.get() == packetId % 2)
+                if (inComing.getShort() == sessionId && inComing.get() == Math.abs(packetId % 2))
                 {
                     //TODO behavoir maybe resend and break IFF correctSessionId and Timeout
                     break; //Succesfully sent
@@ -162,7 +162,8 @@ public class Client implements AutoCloseable
         assert(data.hasArray());
         
         packetId++;
-        data.putShort(sessionId); data.put((byte)(packetId % 2));
+        
+        data.putShort(sessionId); data.put((byte)(Math.abs((packetId) % 2)));
         
         int read = cfis.read(data.array(),headerlength,dataFieldOctets);//Todo catch IOException and retry
         int toBeUsed = headerlength;
