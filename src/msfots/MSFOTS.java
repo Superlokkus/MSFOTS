@@ -24,7 +24,8 @@ public class MSFOTS {
         {
                 System.out.println("Usage:");
                 System.out.println("as server (to recive):");
-                System.out.println("\t<Program> s <IP> <Port>");
+                System.out.println("\t<Program> s <Port>");
+                System.out.println("\t<Program> s <Port> <PacketLossProb> <Delay in ms>");
                 System.out.println("as client (to send):");
                 System.out.println("\t<Program> c <IP> <Port> <File>");
                 return;
@@ -34,6 +35,28 @@ public class MSFOTS {
             case 's':
             case 'S':
                 System.out.println("Server-Mode");
+                switch (args.length)
+                {
+                    case 2:
+                        try (msfots.Server s = new msfots.Server(Integer.parseInt(args[1]),Paths.get(System.getProperty("user.dir"))))
+                        {
+                            System.out.println("Using current working dir: " + System.getProperty("user.dir"));
+                            s.recvLoop();
+                        }
+                    break;
+                    case 4:
+                        try (msfots.Server s = 
+                                new msfots.Server(Integer.parseInt(args[1]),Paths.get(System.getProperty("user.dir")),
+                                Float.parseFloat(args[2]),Long.parseLong(args[3])))
+                        {
+                            System.out.println("Using current working dir: " + System.getProperty("user.dir"));
+                            s.recvLoop();
+                        }
+                    break;
+                    default:
+                        System.out.println("Incorrect number of arguments!");
+                        break;
+                }
                 break;
             case 'C':
             case 'c':
