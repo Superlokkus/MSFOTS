@@ -8,13 +8,16 @@ package msfots;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.*;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
+import java.util.zip.CRC32;
 import java.util.zip.CheckedInputStream;
+import java.util.zip.CheckedOutputStream;
 
 /**
  *
- * @author markus
+ * @author MarkusKlemm.net
  */
 public class Server implements AutoCloseable {
     
@@ -49,10 +52,17 @@ public class Server implements AutoCloseable {
                 {
                     continue;
                 }
-                
+                System.out.println("Start packet evaluated ");
+                p.resolve(fileName);
+                System.out.println("Path now: " + p.toString());
+                ds.send(getACK());
+//                try (cfos = new FileOutputStream(,new CRC32()))
+//                {
+//                    
+//                }
 
                 
-            } catch (IndexOutOfBoundsException e)
+            } catch (BufferUnderflowException e)
             {
                 System.out.println("Error: Malformed Packet");
             }
@@ -61,26 +71,40 @@ public class Server implements AutoCloseable {
     }
     
     private short sessionId;
-    private byte packetId;
+    private byte lastPacketId;
+    private int clientPort;
+    private InetAddress clientAddr;
     private long fileLen;
     private String fileName;
     private long fileCRC;
-    private CheckedInputStream cfis;
+    private CheckedOutputStream cfos;
+    
+    private DatagramPacket getACK()
+    {
+        ByteBuffer b = ByteBuffer.allocate(3);
+        assert(b.hasArray());
+       
+        b.putShort(sessionId);
+        b.put(lastPacketId);
+        
+        return new DatagramPacket(b.array(),b.capacity(),clientAddr,clientPort);
+    }
     
     private boolean processStartPacket(ByteBuffer data) throws UnsupportedEncodingException
     {
+        CRC32 actualPacketCRC = new CRC32();
         sessionId = data.getShort();
         System.out.print("SessionNumber: ");
         System.out.println(sessionId);
-        packetId = data.get();
-        if (packetId != 0) {
+        lastPacketId = data.get();
+        if (lastPacketId != 0) {
             System.out.println("Error: Start PacketId not 0");
             return false;
         }
         byte[] token = new byte[5];
         data.get(token);
         final byte[] start = {0x53, 0x74, 0x61, 0x72, 0x74};
-        if (token != start) {
+        if (token.equals(start)) {
             System.out.println("Error: Malformed Magic Number");
             return false;
         }
@@ -89,8 +113,16 @@ public class Server implements AutoCloseable {
         
         byte [] name = new byte[nameLen]; data.get(name);
         fileName = new String(name,"UTF-8");
+        actualPacketCRC.update(data.array(), 0, data.position());
+        final long packetCRC = data.getInt();
         
-        fileCRC = data.getLong();
+        if (actualPacketCRC.getValue() != packetCRC)
+        {
+            System.out.println("Error: Start packet CRC32 test failed");
+            System.out.println("Submitted start CRC: " + packetCRC + 
+                    " actual: " + actualPacketCRC.getValue());
+            return false;
+        }
         
         return true;
     }
