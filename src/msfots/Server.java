@@ -53,7 +53,12 @@ public class Server implements AutoCloseable {
                     continue;
                 }
                 System.out.println("Start packet evaluated ");
-                p.resolve(fileName);
+                //System.getProperty("file.separator");
+                Path filePath = p.resolve(fileName);
+                if (filePath.toFile().exists())
+                {
+                    filePath = p.resolve(fileName + "1");
+                }
                 System.out.println("Path now: " + p.toString());
                 ds.send(getACK());
 //                try (cfos = new FileOutputStream(,new CRC32()))
@@ -114,7 +119,10 @@ public class Server implements AutoCloseable {
         byte [] name = new byte[nameLen]; data.get(name);
         fileName = new String(name,"UTF-8");
         actualPacketCRC.update(data.array(), 0, data.position());
-        final long packetCRC = data.getInt();
+        
+        //Ugly hack incoming, damn missing unsigned integers
+        data.position(data.position() - 4); //Have to use getLong instead of getInt but want to read an Int
+        final long packetCRC = (long)((int) data.getLong()); //Can't use getInt because it would convert to 2 complement
         
         if (actualPacketCRC.getValue() != packetCRC)
         {
