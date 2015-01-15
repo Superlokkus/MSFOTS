@@ -5,6 +5,7 @@
  */
 package msfots;
 
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.*;
@@ -12,7 +13,6 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.zip.CRC32;
-import java.util.zip.CheckedInputStream;
 import java.util.zip.CheckedOutputStream;
 
 /**
@@ -36,14 +36,16 @@ public class Server implements AutoCloseable {
     
     public void recvLoop () throws IOException
     {
-        ByteBuffer data = ByteBuffer.allocate(512);
+        ByteBuffer data = ByteBuffer.allocate(65536);
         assert(data.hasArray());
         DatagramPacket packet = new DatagramPacket(data.array(),data.capacity());
         
         while (true)
         {
+            //Per Session Loop
             try{
                 System.out.println("Waiting for Connection");
+                startACKRecv = false;
                 data.clear();
                 ds.receive(packet);
                 data.limit(packet.getLength());
@@ -57,14 +59,54 @@ public class Server implements AutoCloseable {
                 Path filePath = p.resolve(fileName);
                 if (filePath.toFile().exists())
                 {
+                    System.out.println("File already exists");
                     filePath = p.resolve(fileName + "1");
                 }
-                System.out.println("Path now: " + p.toString());
+                System.out.println("File will be stored in: " + filePath.toString());
                 ds.send(getACK());
-//                try (cfos = new FileOutputStream(,new CRC32()))
-//                {
-//                    
-//                }
+                
+                try
+                {
+                    cfos = new CheckedOutputStream(new FileOutputStream (filePath.toFile()),new CRC32());
+                    fileLenRecv = 0;
+                    
+                    while (true)
+                    {
+                        //Per (Data)Packet loop
+                        data.clear();
+                        ds.receive(packet);
+                        data.limit(packet.getLength());
+                        
+                        if (!startACKRecv)
+                        {
+                            //Maybe Client did not recieved first ACK
+                            if (data.getShort() == sessionId && data.get() == 0)
+                            {
+                                //Client has obviously not recieved first ACK
+                                ds.send(getACK());
+                                continue;
+                            } else{
+                                startACKRecv = true;
+                                data.rewind();
+                            }
+                        }
+                        
+                        if (fileLenRecv == fileLen)
+                        {
+                            //Just 
+                        }
+                        
+                        
+                        
+                    }
+            
+                    
+                    
+                }
+                finally
+                {
+                    cfos.close();
+                }
 
                 
             } catch (BufferUnderflowException e)
@@ -80,9 +122,11 @@ public class Server implements AutoCloseable {
     private int clientPort;
     private InetAddress clientAddr;
     private long fileLen;
+    private long fileLenRecv;
     private String fileName;
     private long fileCRC;
     private CheckedOutputStream cfos;
+    private boolean startACKRecv;
     
     private DatagramPacket getACK()
     {
@@ -120,11 +164,9 @@ public class Server implements AutoCloseable {
         fileName = new String(name,"UTF-8");
         actualPacketCRC.update(data.array(), 0, data.position());
         
-        //Ugly hack incoming, damn missing unsigned integers
-        data.position(data.position() - 4); //Have to use getLong instead of getInt but want to read an Int
-        final long packetCRC = (long)((int) data.getLong()); //Can't use getInt because it would convert to 2 complement
+        final int packetCRC = data.getInt();
         
-        if (actualPacketCRC.getValue() != packetCRC)
+        if ( (int) actualPacketCRC.getValue() != packetCRC)
         {
             System.out.println("Error: Start packet CRC32 test failed");
             System.out.println("Submitted start CRC: " + packetCRC + 
@@ -135,6 +177,22 @@ public class Server implements AutoCloseable {
         return true;
     }
     
+    /** @return Returns True if the next packet to be recieved is a resent start packet */
+    boolean lostStartACK(ByteBuffer data, DatagramPacket packet) throws IOException {
+        data.clear();
+        ds.receive(packet);
+        data.limit(packet.getLength());
+
+        try {
+            if (data.getShort() == sessionId && data.get() == 0) {
+                return true;
+            }
+        } catch (BufferUnderflowException e) {
+            return false;
+        }
+        return false;
+    }
+
     @Override
     public void close()
     {
