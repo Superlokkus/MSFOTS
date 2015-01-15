@@ -72,6 +72,7 @@ public class Server implements AutoCloseable {
                 {
                     cfos = new CheckedOutputStream(new FileOutputStream (filePath.toFile()),new CRC32());
                     fileLenRecv = 0;
+                    int lastPacketOffset = 0;
                     
                     while (true)
                     {
@@ -101,10 +102,10 @@ public class Server implements AutoCloseable {
                         final byte PacketId = data.get();
                         if (PacketId == (byte) Math.abs(lastPacketId %2 )) 
                         {
-                            System.out.println("Resend Packet");
+                            //Resent Packet
                             ds.send(getACK());
                             continue;
-                        } else if (PacketId != (byte) Math.abs(lastPacketId +1 %2 ))
+                        } else if (PacketId != (byte) Math.abs((lastPacketId +1) %2 ))
                         {
                             System.out.println("Illegal Packet Number");
                             continue;
@@ -116,21 +117,23 @@ public class Server implements AutoCloseable {
                         if (toRead > shouldLeftToRead)
                         {
                             //Last Packet read CRC
-                            if (toRead != shouldLeftToRead + 4)
+                            if (toRead != shouldLeftToRead + 4 && shouldLeftToRead != 0)
                             {
                                 System.out.println("Warning: Last Packet probably malformed");
                             }
                             toRead -= 4;
+                            lastPacketOffset = toRead;
                         }
                         cfos.write(data.array(), data.position(),(int) Math.min(toRead, shouldLeftToRead));
                         fileLenRecv += Math.min(toRead, shouldLeftToRead);
                         
-                        if (shouldLeftToRead == 0)
+                        if (fileLen - fileLenRecv == 0)
                         {
+                            data.position(data.position() + lastPacketOffset);
                             final int fileCRC = data.getInt();
                             System.out.println("CRC checksum recieved: " + fileCRC);
-                            System.out.println("Actual CRC checksum: " + cfos.getChecksum().getValue());
-                            if ( fileCRC != (int) cfos.getChecksum().getValue() )
+                            System.out.println("Actual CRC checksum: " + (int) cfos.getChecksum().getValue());
+                            if ( (int) fileCRC != (int) cfos.getChecksum().getValue() )
                             {
                                 System.out.println("CRC Check failed");
                                 continue;
