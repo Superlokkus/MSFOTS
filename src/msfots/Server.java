@@ -30,6 +30,7 @@ public class Server implements AutoCloseable {
     {
         p = path;
         ds = new DatagramSocket(port);
+        ds.setSoTimeout(42 * 1000);
         
         loss = packetLoss; delay = delayInMS;
     }
@@ -63,8 +64,10 @@ public class Server implements AutoCloseable {
                     filePath = p.resolve(fileName + "1");
                 }
                 System.out.println("File will be stored in: " + filePath.toString());
-                ds.send(getACK());
+                clientAddr = packet.getAddress();
+                clientPort = packet.getPort();
                 
+                ds.send(getACK());
                 try
                 {
                     cfos = new CheckedOutputStream(new FileOutputStream (filePath.toFile()),new CRC32());
@@ -91,13 +94,50 @@ public class Server implements AutoCloseable {
                             }
                         }
                         
-                        if (fileLenRecv == fileLen)
+                        if (data.getShort() != sessionId)
                         {
-                            //Just 
+                            break;
+                        }
+                        final byte PacketId = data.get();
+                        if (PacketId == (byte) Math.abs(lastPacketId %2 )) 
+                        {
+                            System.out.println("Resend Packet");
+                            ds.send(getACK());
+                            continue;
+                        } else if (PacketId != (byte) Math.abs(lastPacketId +1 %2 ))
+                        {
+                            System.out.println("Illegal Packet Number");
+                            continue;
                         }
                         
+                        int toRead = data.limit() - data.position();
+                        final long shouldLeftToRead = fileLen - fileLenRecv;
                         
+                        if (toRead > shouldLeftToRead)
+                        {
+                            //Last Packet read CRC
+                            if (toRead != shouldLeftToRead + 4)
+                            {
+                                System.out.println("Warning: Last Packet probably malformed");
+                            }
+                            toRead -= 4;
+                        }
+                        cfos.write(data.array(), data.position(),(int) Math.min(toRead, shouldLeftToRead));
+                        fileLenRecv += Math.min(toRead, shouldLeftToRead);
                         
+                        if (shouldLeftToRead == 0)
+                        {
+                            final int fileCRC = data.getInt();
+                            System.out.println("CRC checksum recieved: " + fileCRC);
+                            System.out.println("Actual CRC checksum: " + cfos.getChecksum().getValue());
+                            if ( fileCRC != (int) cfos.getChecksum().getValue() )
+                            {
+                                System.out.println("CRC Check failed");
+                                continue;
+                            }
+                        }
+                        lastPacketId++;
+                        ds.send(getACK());
                     }
             
                     
@@ -112,7 +152,11 @@ public class Server implements AutoCloseable {
             } catch (BufferUnderflowException e)
             {
                 System.out.println("Error: Malformed Packet");
+            } catch (java.net.SocketTimeoutException e)
+            {
+                System.out.println("Session-Timeout");
             }
+            
         }    
         
     }
@@ -124,7 +168,6 @@ public class Server implements AutoCloseable {
     private long fileLen;
     private long fileLenRecv;
     private String fileName;
-    private long fileCRC;
     private CheckedOutputStream cfos;
     private boolean startACKRecv;
     
@@ -176,23 +219,7 @@ public class Server implements AutoCloseable {
         
         return true;
     }
-    
-    /** @return Returns True if the next packet to be recieved is a resent start packet */
-    boolean lostStartACK(ByteBuffer data, DatagramPacket packet) throws IOException {
-        data.clear();
-        ds.receive(packet);
-        data.limit(packet.getLength());
-
-        try {
-            if (data.getShort() == sessionId && data.get() == 0) {
-                return true;
-            }
-        } catch (BufferUnderflowException e) {
-            return false;
-        }
-        return false;
-    }
-
+ 
     @Override
     public void close()
     {
