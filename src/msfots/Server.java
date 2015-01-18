@@ -12,6 +12,9 @@ import java.net.*;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
+import java.util.Random;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.zip.CRC32;
 import java.util.zip.CheckedOutputStream;
 
@@ -32,6 +35,7 @@ public class Server implements AutoCloseable {
         ds = new DatagramSocket(port);
         ds.setSoTimeout(42 * 1000);
         
+        random = new Random();
         loss = packetLoss; delay = delayInMS;
     }
     
@@ -67,7 +71,8 @@ public class Server implements AutoCloseable {
                 clientAddr = packet.getAddress();
                 clientPort = packet.getPort();
                 
-                ds.send(getACK());
+                if (!send(getACK()))
+                        System.out.println("Dice roll said: Don't send the ACK");
                 try
                 {
                     cfos = new CheckedOutputStream(new FileOutputStream (filePath.toFile()),new CRC32());
@@ -87,7 +92,8 @@ public class Server implements AutoCloseable {
                             if (data.getShort() == sessionId && data.get() == 0)
                             {
                                 //Client has obviously not recieved first ACK
-                                ds.send(getACK());
+                                if (!send(getACK()))
+                                    System.out.println("Dice roll said: Don't send the ACK");
                                 continue;
                             } else{
                                 startACKRecv = true;
@@ -103,7 +109,8 @@ public class Server implements AutoCloseable {
                         if (PacketId == (byte) Math.abs(lastPacketId %2 )) 
                         {
                             //Resent Packet
-                            ds.send(getACK());
+                            if (!send(getACK()))
+                                System.out.println("Dice roll said: Don't send the ACK");
                             continue;
                         } else if (PacketId != (byte) Math.abs((lastPacketId +1) %2 ))
                         {
@@ -140,7 +147,9 @@ public class Server implements AutoCloseable {
                             }
                         }
                         lastPacketId++;
-                        ds.send(getACK());
+                        
+                        if (!send(getACK()))
+                            System.out.println("Dice roll said: Don't send the ACK");
                     }
             
                     
@@ -229,8 +238,27 @@ public class Server implements AutoCloseable {
         ds.close();
     }
     
+    private boolean send(DatagramPacket p) throws IOException
+    {
+        if ( random.nextFloat() <= loss)
+        {
+            return false;
+        }
+        if (delay != 0)
+        {
+            System.out.println("But will send this packet but with a delay of " + delay + " ms");
+            try {
+                Thread.sleep(delay);
+            } catch (InterruptedException ex) {
+            }
+        }
+        ds.send(p);
+        return true;
+    }
+    
     private DatagramSocket ds;
     private Path p;
     private final float loss;
     private final long delay;
+    private Random random;
 }
