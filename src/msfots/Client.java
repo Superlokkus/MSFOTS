@@ -14,6 +14,7 @@ import java.util.zip.*;
 import java.nio.Buffer.*;
 import java.nio.ByteBuffer;
 import java.lang.*;
+import static java.lang.Integer.max;
 
 /**
  *
@@ -32,6 +33,7 @@ public class Client implements AutoCloseable
     
     public void sendFile(Path pathToFile) throws FileNotFoundException, IOException
     {
+        final long startTime = System.nanoTime();
         p = pathToFile;
         
         cfis = new CheckedInputStream (new FileInputStream(p.toString()),new CRC32());
@@ -46,7 +48,7 @@ public class Client implements AutoCloseable
         {
             public int getValue()
             {
-                return (min(1000,eRTT + 4 * dRTT));
+                return (max(1000,eRTT + 4 * dRTT));
             }
             
             public void sampleRTT(int sRTT)
@@ -103,6 +105,9 @@ public class Client implements AutoCloseable
             }
             
         } while ((outGoingPacket = generateNextPacket()) != null);
+        
+        final long sendTime = System.nanoTime() -startTime;
+        System.out.println("Total bit rate: " + ((p.toFile().length() *8000000) / sendTime) + " kbit/s");
     }
     
     @Override
