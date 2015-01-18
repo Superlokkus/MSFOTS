@@ -249,6 +249,7 @@ public class Server implements AutoCloseable {
             System.out.println("But will send this packet but with a delay of " + delay + " ms");
             try {
                 Thread.sleep(delay);
+                System.out.println("Done waiting");
             } catch (InterruptedException ex) {
             }
         }

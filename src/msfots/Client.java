@@ -87,7 +87,7 @@ public class Client implements AutoCloseable
                     ds.receive(inComingPacket);
                 } catch (java.net.SocketTimeoutException e)
                 {
-                    rto.sampleRTT((int) (System.nanoTime() - pre) / 1000);
+                    rto.sampleRTT((int) (System.nanoTime() - pre) / 1000000);
     
                     if (sendTry == 10)
                     {
@@ -95,7 +95,7 @@ public class Client implements AutoCloseable
                     }
                     continue; //Retry
                 }
-                rto.sampleRTT((int) (System.nanoTime() - pre) / 1000);
+                rto.sampleRTT((int) (System.nanoTime() - pre) / 1000000);
                 if (inComing.getShort() == sessionId && inComing.get() == Math.abs(packetId % 2))
                 {
                     //TODO behavoir maybe resend and break IFF correctSessionId and Timeout
