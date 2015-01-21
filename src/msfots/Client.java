@@ -6,7 +6,6 @@
 package msfots;
 
 import java.io.*;
-import static java.lang.Integer.min;
 import java.net.*;
 import java.nio.file.Path;
 import java.util.*;
@@ -14,7 +13,7 @@ import java.util.zip.*;
 import java.nio.Buffer.*;
 import java.nio.ByteBuffer;
 import java.lang.*;
-import static java.lang.Integer.max;
+import java.lang.Math;
 
 /**
  *
@@ -48,7 +47,7 @@ public class Client implements AutoCloseable
         {
             public int getValue()
             {
-                return (max(1000,eRTT + 4 * dRTT));
+                return (Math.max(1000,eRTT + 4 * dRTT));
             }
             
             public void sampleRTT(int sRTT)
@@ -142,8 +141,8 @@ public class Client implements AutoCloseable
         
         data.putLong(p.toFile().length());
         
-        data.putShort((short) min(255, p.getFileName().toString().length()));
-        data.put(p.getFileName().toString().substring(0,min(255, p.getFileName().toString().length())).getBytes("UTF-8") );
+        data.putShort((short) Math.min(255, p.getFileName().toString().length()));
+        data.put(p.getFileName().toString().substring(0,Math.min(255, p.getFileName().toString().length())).getBytes("UTF-8") );
         
         CRC32 firstPacketCRC = new CRC32();
         assert(data.hasArray());
